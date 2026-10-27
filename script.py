@@ -1,16 +1,16 @@
-import configparser
-import json
+import configparser     #For User Config 
+import sqlite3      #For Banned Ip List
 import select
 from systemd import journal
 from datetime import datetime, timedelta
 
 
 
-
+#Sets up log reader
 J = journal.Reader()
 J.log_level(journal.LOG_INFO)
 J.add_match('_SYSTEMD_UNIT=jellyfin.service')
-
+#Reads end of log
 J.seek_tail()
 J.get_previous()
 
@@ -21,8 +21,8 @@ while True:
     if P.poll(J.get_timeout_ms()):
         if J.process() == journal.APPEND:
             for entry in J:
-                print("whattt")
-
+                msg = entry.get("MESSAGE", "")
+                print(msg)
 
 
 
