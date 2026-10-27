@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 
 #Sets up log reader
 J = journal.Reader()
-J.log_level(journal.LOG_INFO)
 J.add_match('_SYSTEMD_UNIT=jellyfin.service')
 #Reads end of log
+J.log_level(journal.LOG_INFO)
 J.seek_tail()
 J.get_previous()
 
