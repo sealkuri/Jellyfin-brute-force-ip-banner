@@ -21,8 +21,9 @@ while True:
     if P.poll(J.get_timeout_ms()):
         if J.process() == journal.APPEND:
             for entry in J:
-                msg = entry.get("MESSAGE", "")
-                print(msg)
+                if entry.get("MESSAGE", "").split("] ").startswith("Authentication request"):
+                    msg = entry.get("MESSAGE", "")
+                    print(msg)
 
 
 
