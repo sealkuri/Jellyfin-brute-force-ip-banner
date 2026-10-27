@@ -2,23 +2,23 @@ import configparser     #For User Config
 import sqlite3      #For Banned Ip List
 import select
 from systemd import journal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 
 class Check:
     def __init__(self):
-        self.Time = datetime.now()
+        self.Time = datetime.now(timezone.utc).astimezone()
         self.Tries = 0
 
-    def evaluate(self, entry):
-        if entry.get("__REALTIME_TIMESTAMP", "") - timedelta(minutes=3) > self.Time:
-            self.Time = entry.get("__REALTIME_TIMESTAMP")
+    def evaluate(self, TS, IP):
+        if self.Time - TS >= timedelta(minutes=3):
+            self.Time = TS
             self.Tries = 1
         else:
             self.Tries+=1
         if self.Tries >=5:
-            print('banned')
+            print(IP)
     
 
 class LogParser():
@@ -42,7 +42,8 @@ class LogParser():
                 if J.process() == journal.APPEND:
                     for entry in J:
                         if "Authentication request" and "denied" in entry.get("MESSAGE", ""):
-                            CheckLog.evaluate(entry)
+                            
+                            CheckLog.evaluate(entry.get("__REALTIME_TIMESTAMP", ""), entry.get("MESSAGE", "").split("IP: ")[1].split(")")[0].strip())
 
 if __name__ == "__main__":
     LogParser()
