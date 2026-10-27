@@ -4,7 +4,8 @@ import select
 from systemd import journal
 from datetime import datetime, timedelta
 
-
+Time = datetime.now()
+Tries = 0
 
 #Sets up log reader
 J = journal.Reader()
@@ -21,9 +22,18 @@ while True:
     if P.poll(J.get_timeout_ms()):
         if J.process() == journal.APPEND:
             for entry in J:
-                if entry.get("MESSAGE", "").split("] ").startswith("Authentication request"):
-                    msg = entry.get("MESSAGE", "")
-                    print(msg)
+                if "Authentication request" and "denied" in entry.get("MESSAGE", ""):
+                    Check(entry)
 
+def Check(entry):
+    if entry.get("__REALTIME_TIMESTAMP", "") - timedelta(minutes=3) > Time:
+        Time = entry.get("__REALTIME_TIMESTAMP")
+        Tries = 1
+    else:
+        Tries+=1
+    if Tries >=5:
+        print('banned')
+    
+    
 
 
