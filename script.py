@@ -37,7 +37,7 @@ class readwrite:
     def ConfSettings(self):
         return(self.Config.getint('SETTINGS', 'Time Window'),
                self.Config.getint('SETTINGS', 'Max Attempts'),
-               self.Config['Whitelist']['Allowed IPs'],
+               self.Config.get('Whitelist', 'Allowed IPs'),
                self.Config.getboolean('NTFY', 'Enabled'),
                self.Config['NTFY']['Server'],
                self.Config['NTFY']['Topic name'])
@@ -55,20 +55,22 @@ class Check:
 
         file = readwrite()
         self.Window, self.Max, self.Whitelist, self.NTFY, self.NTFYServer, self.NTFYTopic = file.ConfSettings()
+        self.Whitelist = self.Whitelist.splitlines()
 
 
     def evaluate(self, TS, IP):
         # If latest Timestamp was within 3 minutes of the current failed login attempt
-        if TS - self.Time >= timedelta(minutes=self.Window):
-            self.Time = datetime.now(timezone.utc).astimezone()
-            self.Tries = 0
-        else:
-            self.Tries+=1
-        if self.Tries >=self.Max:
-            print(IP)
-            if self.NTFY:
-                post(self.NTFYServer + self.NTFYTopic,
-                     data=IP + " Has been banned.".encode(encoding='utf-8'))
+        if IP not in self.Whitelist:
+            if TS - self.Time >= timedelta(minutes=self.Window):
+                self.Time = datetime.now(timezone.utc).astimezone()
+                self.Tries = 0
+            else:
+                self.Tries+=1
+            if self.Tries >=self.Max:
+                print(IP)
+                if self.NTFY:
+                    post(self.NTFYServer + '/' +  self.NTFYTopic,
+                         data= (IP + " Has been banned.").encode(encoding='utf-8'))
     
 
 
