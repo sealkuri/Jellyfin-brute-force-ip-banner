@@ -5,6 +5,7 @@ import select
 from requests import post
 from systemd import journal
 from datetime import datetime, timedelta, timezone
+<<<<<<< HEAD
 
 #TODO Add config and checks for whitelist
 #TODO Add sqlite saving on banned ips
@@ -42,11 +43,14 @@ class readwrite:
                self.Config['NTFY']['Server'],
                self.Config['NTFY']['Topic name'])
 
+=======
+>>>>>>> origin/HEAD
 
 
 
 class Check:
     def __init__(self):
+<<<<<<< HEAD
         # Initializes Timestamp and Tries 
         self.Time = datetime.now(timezone.utc).astimezone()
 
@@ -61,15 +65,28 @@ class Check:
     def evaluate(self, TS, IP):
         # If latest Timestamp was within 3 minutes of the current failed login attempt
         if TS - self.Time >= timedelta(minutes=self.Window):
+=======
+        self.Time = datetime.now(timezone.utc).astimezone()
+        self.Tries = 0
+
+    def evaluate(self, TS, IP):
+        if self.Time - TS >= timedelta(minutes=3):
+>>>>>>> origin/HEAD
             self.Time = TS
             self.Tries = 1
         else:
             self.Tries+=1
+<<<<<<< HEAD
         if self.Tries >=self.Max:
             print(IP)
             if self.NTFY:
                 post(self.NTFYServer + self.NTFYTopic,
                      data=IP + " Has been banned.".encode(encoding='utf-8'))
+=======
+        if self.Tries >=5:
+            print(IP)
+    
+>>>>>>> origin/HEAD
 
 
 
@@ -97,7 +114,11 @@ class LogParser():      # Reads log stream for failed login attemps
                     for entry in J:
                         # Checks to see if log entry is a failed login attempt
                         if "Authentication request" and "denied" in entry.get("MESSAGE", ""):
+<<<<<<< HEAD
                             # Sends Check.evaluate() the failed attempt Timestamp and IP
+=======
+                            
+>>>>>>> origin/HEAD
                             CheckLog.evaluate(entry.get("__REALTIME_TIMESTAMP", ""), entry.get("MESSAGE", "").split("IP: ")[1].split(")")[0].strip())
 
 if __name__ == "__main__":
