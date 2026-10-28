@@ -1,6 +1,7 @@
 import configparser     # For User Config 
 import sqlite3      # For Banned Ip List
 import os
+import subprocess
 import select
 from requests import post
 from systemd import journal
@@ -33,6 +34,21 @@ class readwrite:
         
         else:
             self.Config.read(CONFIG_FILE, encoding="utf-8")
+
+        self.conn = sqlite3.connect('BannedIPs.db')
+        self.conn.execute('''CREATE TABLE IF NOT EXISTS bans(
+                          ip            TEXT PRIMARY KEY,
+                          banned_at     INTEGER NOT NULL)''')
+
+    def UpdateDB(self, IP, TS):
+        self.conn.execute('INSERT INTO bans(ip, banned_at) VALUES (?, ?)',
+                          (IP, int(TS.timestamp()))
+                          )
+        self.conn.commit()
+            
+            
+
+
     
     def ConfSettings(self):
         return(self.Config['SETTINGS']['Time Window'],
@@ -52,13 +68,25 @@ class Check:
         self.Tries = 0
         self.checks = 0
 
-        file = readwrite()
-        self.Window, self.Max, self.Whitelist, self.NTFY, self.NTFYServer, self.NTFYTopic = file.ConfSettings()
+        self.file = readwrite()
+        self.Window, self.Max, self.Whitelist, self.NTFY, self.NTFYServer, self.NTFYTopic = self.file.ConfSettings()
 
         self.Whitelist = self.Whitelist.splitlines()
         self.Window = timedelta(minutes=int(self.Window))
 
         self.IPs= {}
+
+    def ban(self, IP):
+        try:
+            subprocess.run(["iptables", "-A", "INPUT", "-s", IP, "-j", "DROP"], check=True, capture_output=True, text=True )
+        except subprocess.CalledProcessError as error:
+            print('Command failed:', error.stderr)
+
+    def prune(self, Now):
+        old = [ip for ip, timestamp in self.IPs.items()
+               if Now - timestamp['TimeStamp'] > self.Window]
+        for ip in old:
+            del self.IPs[ip]
 
 
     def evaluate(self, TS, IP):
@@ -75,9 +103,20 @@ class Check:
             if self.IPs[IP]['Tries'] >=self.Max:
 
                 print(IP)
+                del self.IPs[IP]
+                #TODO write in sqlite
+                self.file.UpdateDB(IP, TS)
+                #TODO ban in iptables
+
+                #self.ban(IP)
+
                 if self.NTFY:
                     post(self.NTFYServer + '/' +  self.NTFYTopic,
                          data= (IP + " Has been banned.").encode(encoding='utf-8'))
+
+        if self.checks >= 100:
+            self.prune(TS)
+
     
 
 
