@@ -35,7 +35,7 @@ class readwrite:
             self.Config.read(CONFIG_FILE, encoding="utf-8")
     
     def ConfSettings(self):
-        return(self.Config.getint('SETTINGS', 'Time Window'),
+        return(self.Config['SETTINGS']['Time Window'],
                self.Config.getint('SETTINGS', 'Max Attempts'),
                self.Config.get('Whitelist', 'Allowed IPs'),
                self.Config.getboolean('NTFY', 'Enabled'),
@@ -50,23 +50,30 @@ class Check:
         self.Time = datetime.now(timezone.utc).astimezone()
 
         self.Tries = 0
-        self.attempts = {}
         self.checks = 0
 
         file = readwrite()
         self.Window, self.Max, self.Whitelist, self.NTFY, self.NTFYServer, self.NTFYTopic = file.ConfSettings()
+
         self.Whitelist = self.Whitelist.splitlines()
+        self.Window = timedelta(minutes=int(self.Window))
+
+        self.IPs= {}
 
 
     def evaluate(self, TS, IP):
         # If latest Timestamp was within 3 minutes of the current failed login attempt
         if IP not in self.Whitelist:
-            if TS - self.Time >= timedelta(minutes=self.Window):
-                self.Time = datetime.now(timezone.utc).astimezone()
-                self.Tries = 0
+
+            self.checks += 1
+
+            if not IP in self.IPs or TS - self.IPs[IP]['TimeStamp'] > self.Window:
+                self.IPs[IP] = {'TimeStamp':TS, 'Tries': 1 }
+            
             else:
-                self.Tries+=1
-            if self.Tries >=self.Max:
+                self.IPs[IP]['Tries'] += 1
+            if self.IPs[IP]['Tries'] >=self.Max:
+
                 print(IP)
                 if self.NTFY:
                     post(self.NTFYServer + '/' +  self.NTFYTopic,
