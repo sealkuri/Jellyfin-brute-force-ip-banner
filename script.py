@@ -1,6 +1,7 @@
-import configparser  
+import configparser  subprocess
 import sqlite3      # Used for making a database of banned ips to check and re-apply iptable rule after a reboot
 import os       
+import ipaddress
 import subprocess
 import select
 from requests import post, RequestException     # For ntfy notifications, comment out if not wanted
@@ -20,6 +21,11 @@ class ReadWrite:
             self.config['SETTINGS'] = {
                     'Time Window': '5',
                     'Max Attempts': '5'
+                    }
+            self.config['SSH'] = {
+                    'Enabled': 'no',
+                    'User': '',
+                    'Server': '',
                     }
             self.config['Whitelist'] = {
                     'Allowed IPs': ''
@@ -51,10 +57,12 @@ class ReadWrite:
             
     def confsettings(self):     
             return{'window': self.config.getint('SETTINGS', 'Time Window'),
-               'max': self.config.getint('SETTINGS', 'Max Attempts'),
-               'whitelist': self.config.get('Whitelist', 'Allowed IPs'),
-               'ntfy': self.config.getboolean('NTFY', 'Enabled'),
-               'ntfy link': self.config['NTFY']['Server'] + '/' + self.config['NTFY']['Topic name']}
+                   'max': self.config.getint('SETTINGS', 'Max Attempts'),
+                   'ssh': self.config.getboolean('SSH', 'Enabled'),
+                   'ssh command': self.config['SSH']['User'] + '@' + self.config['SSH']['Server'],
+                   'whitelist': self.config.get('Whitelist', 'Allowed IPs'),
+                   'ntfy': self.config.getboolean('NTFY', 'Enabled'),
+                   'ntfy link': self.config['NTFY']['Server'] + '/' + self.config['NTFY']['Topic name']}
 
 
 class Check:
@@ -66,6 +74,8 @@ class Check:
 
         self.window = timedelta(minutes=conf['window'])
         self.max = conf['max']
+        self.ssh = conf['ssh']
+        self.ssh_command = conf['ssh command']
         self.whitelist = conf['whitelist'].splitlines()
         self.ntfy = conf['ntfy']
         self.link = conf['ntfy link']
@@ -80,11 +90,28 @@ class Check:
         rule = ["INPUT", "-s", ip, "-j", "DROP"]
 
         try:
-            exists = subprocess.run(["iptables", "-c", *rule],
-                                    capture_output=True, text=True, timeout=10).returncode == 0 
-            if not exists:
-                subprocess.run(["iptables", "-a", *rule],
-                               check=True, text=True, capture_output=True, timeout=10)
+            if self.ssh:
+                exists = subprocess.run(["ssh", self.ssh_command, "iptables", "-c", *rule],
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=10).returncode == 0 
+                if not exists:
+                    subprocess.run(["sse", self.ssh_command, "iptables", "-a", *rule],
+                                   check=True,
+                                   text=True,
+                                   capture_output=True,
+                                   timeout=10)
+            else:
+                exists = subprocess.run(["iptables", "-c", *rule],
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=10).returncode == 0 
+                if not exists:
+                    subprocess.run(["iptables", "-a", *rule],
+                                   check=True,
+                                   text=True,
+                                   capture_output=True,
+                                   timeout=10)
 
         except (subprocess.CalledProcessError, FileNotFoundError,
                 subprocess.TimeoutExpired) as error:
@@ -95,35 +122,44 @@ class Check:
                if now - timestamp['TimeStamp'] > self.window]
         for ip in old:
             del self.ips[ip]
+    
+    def getip(self, ip):        # Validates for a real external ip adress
+        try:
+            return str(ipaddress.ip_address(ip))
+        except (ValueError, IndexError):
+            return None
+
 
     def evaluate(self, ts, ip): 
-        if ip not in self.whitelist:
+        ip = self.getip(ip)
+        if ip is not None:
 
-            if not ip in self.ips or ts - self.ips[ip]['TimeStamp'] > self.window:      # Creates or resets attempt time and history if old or new
-                self.ips[ip] = {'TimeStamp':ts, 'Tries': 1 }
+            if ip not in self.whitelist:
+                if not ip in self.ips or ts - self.ips[ip]['TimeStamp'] > self.window:      # Creates or resets attempt time and history if old or new
+                    self.ips[ip] = {'TimeStamp':ts, 'Tries': 1 }
+                
+                else:
+                    self.ips[ip]['Tries'] += 1
+
+                    if self.ips[ip]['Tries'] >=self.max:
+                        del self.ips[ip]
+
+                        self.file.updatedb(ip, ts)
+                        self.ban(ip)
+
+                        if self.ntfy:       # For ntfy notifications, comment out if not wanted
+                            try:
+                                post(self.link, data = (ip + " Has been banned.")
+                                     .encode(encoding='utf-8'), timeout=5)
+
+                            except RequestException as error:
+                                print('NTFY failed:', error)
             
-            else:
-                self.ips[ip]['Tries'] += 1
+                self.checks += 1
 
-            if self.ips[ip]['Tries'] >=self.max:
-                del self.ips[ip]
-
-                self.file.updatedb(ip, ts)
-                self.ban(ip)
-
-                if self.ntfy:       # For ntfy notifications, comment out if not wanted
-                    try:
-                        post(self.link, data = (ip + " Has been banned.")
-                             .encode(encoding='utf-8'), timeout=5)
-
-                    except RequestException as error:
-                        print('NTFY failed:', error)
-        
-        self.checks += 1
-
-        if self.checks >= 100:
-            self.prune(ts)
-            self.checks = 0
+                if self.checks >= 100:
+                    self.prune(ts)
+                    self.checks = 0
 
 
 class LogParser:   
