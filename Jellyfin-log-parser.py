@@ -1,4 +1,4 @@
-import configparser  subprocess
+import configparser  
 import sqlite3      # Used for making a database of banned ips to check and re-apply iptable rule after a reboot
 import os       
 import ipaddress
