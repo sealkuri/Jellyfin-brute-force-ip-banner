@@ -42,7 +42,7 @@ class ReadWrite:
                           banned_at     INTEGER NOT NULL)''')
 
     def checkdb(self):
-        return(row[0] for row in self.conn.execute('SELECT * ip FROM bans'))
+        return(row[0] for row in self.conn.execute('SELECT ip FROM bans'))
 
     def updatedb(self, ip, timestamp): 
         self.conn.execute('INSERT OR REPLACE INTO bans(ip, banned_at) VALUES (?, ?)',
@@ -145,7 +145,6 @@ class LogParser:
                 if self.reader.process() == journal.APPEND:
                     for entry in self.reader:
                         msg = entry.get("MESSAGE", "")
-
                         if "Authentication request" in msg and "denied" in msg:    
                             self.checker.evaluate(entry.get("__REALTIME_TIMESTAMP", ""),
                                                   entry.get("MESSAGE", "").split("IP: ", 1)[1].split(")", 1)[0].strip())
