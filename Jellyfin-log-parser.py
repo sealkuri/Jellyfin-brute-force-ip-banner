@@ -1,4 +1,4 @@
-import configparser  subprocess
+import configparser 
 import sqlite3      # Used for making a database of banned ips to check and re-apply iptable rule after a reboot
 import os       
 import ipaddress
@@ -75,7 +75,7 @@ class Check:
         self.window = timedelta(minutes=conf['window'])
         self.max = conf['max']
         self.ssh = conf['ssh']
-        self.ssh_command = conf['ssh command']
+        self.ssh_command = ['ssh', conf['ssh command']]
         self.whitelist = conf['whitelist'].splitlines()
         self.ntfy = conf['ntfy']
         self.link = conf['ntfy link']
@@ -87,31 +87,25 @@ class Check:
             self.ban(ip)
 
     def ban(self, ip):
+        rule_check = ["iptables", "-c"]
+        rule_add = ["iptables", "-a"]
         rule = ["INPUT", "-s", ip, "-j", "DROP"]
+        
+        if self.ssh:
+            rule_check = self.ssh_command + rule_check
+            rule_add = self.ssh_command + rule_add
 
         try:
-            if self.ssh:
-                exists = subprocess.run(["ssh", self.ssh_command, "iptables", "-c", *rule],
-                                        capture_output=True,
-                                        text=True,
-                                        timeout=10).returncode == 0 
-                if not exists:
-                    subprocess.run(["sse", self.ssh_command, "iptables", "-a", *rule],
-                                   check=True,
-                                   text=True,
-                                   capture_output=True,
-                                   timeout=10)
-            else:
-                exists = subprocess.run(["iptables", "-c", *rule],
-                                        capture_output=True,
-                                        text=True,
-                                        timeout=10).returncode == 0 
-                if not exists:
-                    subprocess.run(["iptables", "-a", *rule],
-                                   check=True,
-                                   text=True,
-                                   capture_output=True,
-                                   timeout=10)
+            exists = subprocess.run([*rule_check, *rule],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=10).returncode == 0 
+            if not exists:
+                subprocess.run([*rule_add, *rule],
+                               check=True,
+                               text=True,
+                               capture_output=True,
+                               timeout=10)
 
         except (subprocess.CalledProcessError, FileNotFoundError,
                 subprocess.TimeoutExpired) as error:
