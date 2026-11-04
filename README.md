@@ -14,7 +14,7 @@ Python modules
   - requests
 
 ## Usage
-
+Run as root
 ## Todo
 - [ ] Finish readme
 - [ ] Add docker and other os compatability?
