@@ -19,6 +19,7 @@ class ReadWrite:
 
         if not os.path.exists(CONFIG_FILE):  
             self.config['SETTINGS'] = {
+                    '; in minutes': None,
                     'Time Window': '5',
                     'Max Attempts': '5'
                     }
@@ -28,6 +29,7 @@ class ReadWrite:
                     'Server': '',
                     }
             self.config['Whitelist'] = {
+                    '; one IP per line': None,
                     'Allowed IPs': ''
                     }
             self.config['NTFY'] = {
